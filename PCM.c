@@ -30,8 +30,6 @@
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 
-#define SAMPLE_RATE 8000
-
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
 #else
@@ -65,6 +63,7 @@
  */
 
 int speakerPin = 11;
+char sounddata_loop = 0;
 unsigned char const *sounddata_data=0;
 int sounddata_length=0;
 volatile uint16_t sample;
@@ -73,23 +72,29 @@ byte lastSample;
 // This is called at 8000 Hz to load the next sample.
 ISR(TIMER1_COMPA_vect) {
   if (sample >= sounddata_length) {
-    if (sample == sounddata_length + lastSample) {
-      stopPlayback();
-    }
-    else {
-      // Ramp down to zero to reduce the click at the end of playback.
-      OCR2A = sounddata_length + lastSample - sample;
+    if (sounddata_loop) {
+      sample = 0;
+    } else {
+      if (sample == sounddata_length + lastSample) {
+	stopPlayback();
+      }
+      else {
+	// Ramp down to zero to reduce the click at the end of playback.
+	OCR2A = sounddata_length + lastSample - sample;
+      }
     }
   }
-  else {
+
+  if (sample < sounddata_length) {
     OCR2A = pgm_read_byte(&sounddata_data[sample]);
   }
   
   ++sample;
 }
 
-void startPlayback(unsigned char const *data, int length)
+void startPlayback(unsigned char const *data, int length, char loop, int rate)
 {
+  sounddata_loop = loop;
   sounddata_data = data;
   sounddata_length = length;
 
@@ -132,7 +137,7 @@ void startPlayback(unsigned char const *data, int length)
   // Set the compare register (OCR1A).
   // OCR1A is a 16-bit register, so we have to do this with
   // interrupts disabled to be safe.
-  OCR1A = F_CPU / SAMPLE_RATE;    // 16e6 / 8000 = 2000
+  OCR1A = F_CPU / rate;    // 16e6 / 8000 = 2000
   
   // Enable interrupt when TCNT1 == OCR1A (p.136)
   TIMSK1 |= _BV(OCIE1A);
