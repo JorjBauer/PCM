@@ -62,7 +62,11 @@
  * sox audiodump.wav -c 1 -r 8000 -u -b macstartup-8000.wav
  */
 
+#if defined(__ATTINY85__)
+int speakerPin = 1;
+#else
 int speakerPin = 11;
+#endif
 char sounddata_loop = 0;
 unsigned char const *sounddata_data=0;
 int sounddata_length=0;
@@ -70,7 +74,12 @@ volatile uint16_t sample;
 byte lastSample;
 
 // This is called at 8000 Hz to load the next sample.
-ISR(TIMER1_COMPA_vect) {
+#if defined(__ATTINY85__)
+ISR(TIMER0_COMPA_vect)
+#else
+ISR(TIMER1_COMPA_vect)
+#endif
+{
   if (sample >= sounddata_length) {
     if (sounddata_loop) {
       sample = 0;
@@ -99,6 +108,23 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
   sounddata_length = length;
 
   pinMode(speakerPin, OUTPUT);
+
+#if defined(__ATTINY85__)
+  TCCR0A = (1 << WGM01); // CTC mode
+  TCCR0B = (1 << CS01); // prescaler 8, frequency is 1MHz (cpu is 8MHz)
+  //   TCCR0B = (1 << CS00); // prescaler 1, frequency is 1MHz (cpu is 1MHz)
+  TIMSK = (1 << OCIE0A); // COMPA interrupt
+  OCR0A=31; // 1MHz/125 = 8kHz, the sampling rate. 62.5 for 16k; 31.25 for 32k.
+  // Timer 1 for PWM
+  // PWM mode (250kHz) with duty cycle by OCR1A / toggle output on OC1A=PB1 / prescaler=1 (8MHz)
+  DDRB = (1 << PB1); // PB1 as output
+  TCCR1 = (1 << PWM1A)|(1 << COM1A1)|(1 << CS10);
+
+  cli(); // FIXME: this belongs up higher.
+
+  OCR1A = pgm_read_byte(&sounddata_data[0]);
+
+#else
   
   // Set up Timer 2 to do pulse width modulation on the speaker
   // pin.
@@ -121,7 +147,6 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
   // Set initial pulse width to the first sample.
   OCR2A = pgm_read_byte(&sounddata_data[0]);
   
-  
   // Set up Timer 1 to send a sample every interrupt.
   
   cli();
@@ -141,6 +166,7 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
   
   // Enable interrupt when TCNT1 == OCR1A (p.136)
   TIMSK1 |= _BV(OCIE1A);
+#endif
   
   lastSample = pgm_read_byte(&sounddata_data[sounddata_length-1]);
   sample = 0;
@@ -149,6 +175,11 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
 
 void stopPlayback()
 {
+#if defined(__ATTINY85__)
+  TIMSK &= ~_BV(OCIE0A);
+  TCCR0B &= ~_BV(CS01);
+  TCCR1 &= ~_BV(CS10);
+#else
   // Disable playback per-sample interrupt.
   TIMSK1 &= ~_BV(OCIE1A);
   
@@ -157,6 +188,7 @@ void stopPlayback()
   
   // Disable the PWM timer.
   TCCR2B &= ~_BV(CS10);
+#endif
   
   digitalWrite(speakerPin, LOW);
 }
