@@ -62,7 +62,7 @@
  * sox audiodump.wav -c 1 -r 8000 -u -b macstartup-8000.wav
  */
 
-#if defined(__ATTINY85__)
+#if defined(__AVR_ATtiny85__)
 int speakerPin = 1;
 #else
 int speakerPin = 11;
@@ -74,7 +74,7 @@ volatile uint16_t sample;
 byte lastSample;
 
 // This is called at 8000 Hz to load the next sample.
-#if defined(__ATTINY85__)
+#if defined(__AVR_ATtiny85__)
 ISR(TIMER0_COMPA_vect)
 #else
 ISR(TIMER1_COMPA_vect)
@@ -89,13 +89,21 @@ ISR(TIMER1_COMPA_vect)
       }
       else {
 	// Ramp down to zero to reduce the click at the end of playback.
+#if defined(__AVR_ATtiny85__)
+	OCR1A = sounddata_length + lastSample - sample;
+#else
 	OCR2A = sounddata_length + lastSample - sample;
+#endif
       }
     }
   }
 
   if (sample < sounddata_length) {
+#if defined(__AVR_ATtiny85__)
+    OCR1A = pgm_read_byte(&sounddata_data[sample]);
+#else
     OCR2A = pgm_read_byte(&sounddata_data[sample]);
+#endif
   }
   
   ++sample;
@@ -109,7 +117,7 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
 
   pinMode(speakerPin, OUTPUT);
 
-#if defined(__ATTINY85__)
+#if defined(__AVR_ATtiny85__)
   TCCR0A = (1 << WGM01); // CTC mode
   TCCR0B = (1 << CS01); // prescaler 8, frequency is 1MHz (cpu is 8MHz)
   //   TCCR0B = (1 << CS00); // prescaler 1, frequency is 1MHz (cpu is 1MHz)
@@ -175,7 +183,7 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
 
 void stopPlayback()
 {
-#if defined(__ATTINY85__)
+#if defined(__AVR_ATtiny85__)
   TIMSK &= ~_BV(OCIE0A);
   TCCR0B &= ~_BV(CS01);
   TCCR1 &= ~_BV(CS10);
