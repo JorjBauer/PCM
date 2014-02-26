@@ -55,7 +55,12 @@
 extern "C" {
 #endif
 
+#define SAMPLE_RATE 8000
+
+
+int isPlaying();
 void startPlayback(unsigned char const *data, int length);
+void startPlaybackSpeed(unsigned char const *data, int length, int speed);
 void stopPlayback();
 
 #ifdef __cplusplus
