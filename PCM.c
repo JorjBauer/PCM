@@ -92,6 +92,7 @@ void startPlayback(unsigned char const *data, int length)
 {
   sounddata_data = data;
   sounddata_length = length;
+  playing = 1;
 
   pinMode(speakerPin, OUTPUT);
   
@@ -154,4 +155,5 @@ void stopPlayback()
   TCCR2B &= ~_BV(CS10);
   
   digitalWrite(speakerPin, LOW);
+  playing = 0;
 }
