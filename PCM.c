@@ -30,7 +30,7 @@
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 
-#define SAMPLE_RATE 8000
+
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -71,6 +71,7 @@ unsigned char const *sounddata_data=0;
 int sounddata_length=0;
 volatile uint16_t sample;
 byte lastSample;
+int playing = 0;
 
 // This is called at 8000 Hz to load the next sample.
 ISR(TIMER1_COMPA_vect) {
@@ -92,6 +93,13 @@ ISR(TIMER1_COMPA_vect) {
 
 void startPlayback(unsigned char const *data, int length)
 {
+  startPlaybackSpeed(data,length,SAMPLE_RATE);
+}
+
+void startPlaybackSpeed(unsigned char const *data, int length, int speed)
+{
+  playing = 1;
+  
   sounddata_data = data;
   sounddata_length = length;
   playing = 1;
@@ -135,7 +143,7 @@ void startPlayback(unsigned char const *data, int length)
   // Set the compare register (OCR1A).
   // OCR1A is a 16-bit register, so we have to do this with
   // interrupts disabled to be safe.
-  OCR1A = F_CPU / SAMPLE_RATE;    // 16e6 / 8000 = 2000
+  OCR1A = F_CPU / speed;    // 16e6 / 8000 = 2000
   
   // Enable interrupt when TCNT1 == OCR1A (p.136)
   TIMSK1 |= _BV(OCIE1A);
@@ -160,4 +168,8 @@ void stopPlayback()
   playing = 0;
   if (donePlaying != NULL)
     (*donePlaying)();
+}
+
+int isPlaying() {
+  return playing;
 }
