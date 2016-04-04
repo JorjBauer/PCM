@@ -55,7 +55,7 @@
 extern "C" {
 #endif
 
-volatile uint8_t playing;
+extern volatile uint8_t playing;
 
 #define SAMPLE_RATE 8000
 
