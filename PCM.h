@@ -59,6 +59,7 @@ volatile uint8_t playing;
 
 void startPlayback(unsigned char const *data, int length);
 void stopPlayback();
+extern void (*donePlaying)(void);
 
 #ifdef __cplusplus
 }

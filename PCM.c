@@ -40,6 +40,8 @@
 
 #include "PCM.h"
 
+void (*donePlaying)(void) = 0;
+
 /*
  * The audio data needs to be unsigned, 8-bit, 8000 Hz, and small enough
  * to fit in flash. 10000-13000 samples is about the limit.
@@ -156,4 +158,6 @@ void stopPlayback()
   
   digitalWrite(speakerPin, LOW);
   playing = 0;
+  if (donePlaying != NULL)
+    (*donePlaying)();
 }
