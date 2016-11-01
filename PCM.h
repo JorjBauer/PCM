@@ -55,8 +55,15 @@
 extern "C" {
 #endif
 
-void startPlayback(unsigned char const *data, int length, char loop, int rate);
+extern volatile uint8_t playing;
+
+#define SAMPLE_RATE 8000
+
+void startPlayback(unsigned char const *data, int length);
+void startPlaybackSpeed(unsigned char const *data, int length, int rate);
 void stopPlayback();
+int isPlaying();
+extern void (*donePlaying)(void);
 
 #ifdef __cplusplus
 }

@@ -38,6 +38,8 @@
 
 #include "PCM.h"
 
+void (*donePlaying)(void) = 0;
+
 /*
  * The audio data needs to be unsigned, 8-bit, 8000 Hz, and small enough
  * to fit in flash. 10000-13000 samples is about the limit.
@@ -67,11 +69,12 @@ int speakerPin = 1;
 #else
 int speakerPin = 11;
 #endif
-char sounddata_loop = 0;
+
 unsigned char const *sounddata_data=0;
 int sounddata_length=0;
 volatile uint16_t sample;
 byte lastSample;
+volatile uint8_t playing = 0;
 
 // This is called at 8000 Hz to load the next sample.
 #if defined(__AVR_ATtiny85__)
@@ -81,49 +84,56 @@ ISR(TIMER1_COMPA_vect)
 #endif
 {
   if (sample >= sounddata_length) {
-    if (sounddata_loop) {
-      sample = 0;
-    } else {
-      if (sample == sounddata_length + lastSample) {
-	stopPlayback();
-      }
-      else {
-	// Ramp down to zero to reduce the click at the end of playback.
+    if (sample == sounddata_length + lastSample) {
+      stopPlayback();
+    }
+    else {
+      // Ramp down to zero to reduce the click at the end of playback.
 #if defined(__AVR_ATtiny85__)
 	OCR1A = sounddata_length + lastSample - sample;
 #else
 	OCR2A = sounddata_length + lastSample - sample;
 #endif
-      }
+	
     }
-  }
-
-  if (sample < sounddata_length) {
+  } 
+  else {
 #if defined(__AVR_ATtiny85__)
     OCR1A = pgm_read_byte(&sounddata_data[sample]);
 #else
     OCR2A = pgm_read_byte(&sounddata_data[sample]);
 #endif
   }
-  
   ++sample;
 }
 
-void startPlayback(unsigned char const *data, int length, char loop, int rate)
+void startPlayback(unsigned char const *data, int length)
 {
-  sounddata_loop = loop;
+  startPlaybackSpeed(data,length,SAMPLE_RATE);
+}
+
+void startPlaybackSpeed(unsigned char const *data, int length, int rate)
+{
   sounddata_data = data;
   sounddata_length = length;
+  playing = 1;
 
   pinMode(speakerPin, OUTPUT);
 
 #if defined(__AVR_ATtiny85__)
   TCCR0A = (1 << WGM01); // CTC mode
+#if (F_CPU == 8000000L)
   TCCR0B = (1 << CS01); // prescaler 8, frequency is 1MHz (cpu is 8MHz)
-  //   TCCR0B = (1 << CS00); // prescaler 1, frequency is 1MHz (cpu is 1MHz)
+#else
+ #if (F_CPU == 1000000L)
+  TCCR0B = (1 << CS00); // prescaler 1, frequency is 1MHz (cpu is 1MHz)
+ #else
+  #error ATTiny85 is not set to 8MHz or 1MHz clock
+ #endif
+#endif
   TIMSK = (1 << OCIE0A); // COMPA interrupt
-  OCR0A=31; // 1MHz/125 = 8kHz, the sampling rate. 62.5 for 16k; 31.25 for 32k.
-  // Timer 1 for PWM
+  OCR0A = 1000000L / (long)rate; // 1MHz timer / 8kHz = 125; 1M/16k=62.5; 1M/32k=31.25
+
   // PWM mode (250kHz) with duty cycle by OCR1A / toggle output on OC1A=PB1 / prescaler=1 (8MHz)
   DDRB = (1 << PB1); // PB1 as output
   TCCR1 = (1 << PWM1A)|(1 << COM1A1)|(1 << CS10);
@@ -131,9 +141,8 @@ void startPlayback(unsigned char const *data, int length, char loop, int rate)
   cli(); // FIXME: this belongs up higher.
 
   OCR1A = pgm_read_byte(&sounddata_data[0]);
-
 #else
-  
+
   // Set up Timer 2 to do pulse width modulation on the speaker
   // pin.
   
@@ -199,4 +208,11 @@ void stopPlayback()
 #endif
   
   digitalWrite(speakerPin, LOW);
+  playing = 0;
+  if (donePlaying != NULL)
+    (*donePlaying)();
+}
+
+int isPlaying() {
+  return playing;
 }
